@@ -1,0 +1,103 @@
+[
+  {
+    "slug": "liber-ivonis",
+    "name": "Liber Ivonis",
+    "pages": [
+      {
+        "id": "1",
+        "title": "Strona 1",
+        "src": "/books/liber-ivonis/data/strona1.csv",
+        "kind": "csv",
+        "password": "test"
+      },
+      {
+        "id": "2",
+        "title": "Strona 2",
+        "src": "/books/liber-ivonis/data/strona2.csv",
+        "kind": "csv",
+        "password": "test"
+      },
+      {
+        "id": "3",
+        "title": "Strona 3",
+        "src": "/books/liber-ivonis/data/strona3.csv",
+        "kind": "csv",
+        "password": "test"
+      }
+    ]
+  },
+  {
+    "slug": "necronomicon",
+    "name": "Necronomicon",
+    "pages": [
+      {
+        "id": "1",
+        "title": "Strona 1",
+        "src": "/books/necronomicon/data/strona1.csv",
+        "kind": "csv",
+        "password": "test"
+      },
+      {
+        "id": "2",
+        "title": "Strona 2",
+        "src": "/books/necronomicon/data/strona2.csv",
+        "kind": "csv",
+        "password": "test"
+      },
+      {
+        "id": "3",
+        "title": "Strona 3",
+        "src": "/books/necronomicon/data/strona3.csv",
+        "kind": "csv",
+        "password": "test"
+      },
+      {
+        "id": "4",
+        "title": "Dodatek(PDF)",
+        "src": "/books/necronomicon/data/dodatek.pdf",
+        "kind": "pdf",
+        "password": "test"
+      }
+    ]
+  },
+  {
+    "slug": "galeria",
+    "name": "Galeria Mrocznych Znaków",
+    "pages": [
+      {
+        "id": "1",
+        "title": "Znak Cthulhu",
+        "src": "/assets/cthulhu-sigil.svg",
+        "kind": "image",
+        "password": "test"
+      },
+      {
+        "id": "2",
+        "title": "Elder Sign",
+        "src": "/assets/elder-sign.svg",
+        "kind": "image",
+        "password": "test"
+      },
+      {
+        "id": "3",
+        "title": "Macki",
+        "src": "/assets/tentacle.svg",
+        "kind": "image",
+        "password": "test"
+      }
+    ]
+  },
+  {
+    "slug": "ksiega-czarow",
+    "name": "Księga Czarów",
+    "pages": [
+      {
+        "id": "1",
+        "title": "Księga Czarów",
+        "src": "/books/pdf/docs.pdf",
+        "kind": "pdf",
+        "password": "test"
+      }
+    ]
+  }
+]

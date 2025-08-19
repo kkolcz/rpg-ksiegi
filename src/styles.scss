@@ -1,1 +1,86 @@
-/* You can add global styles to this file, and also import other style files */
+/* Cthulhu dark theme — global styles */
+
+:root {
+  --bg: #0b0f10;
+  --bg-2: #0f1416;
+  --fg: #cfd8dc;
+  --muted: #90a4ae;
+  --accent: #3ee2b8; /* eldritch green */
+  --accent-2: #7bffcf;
+  --danger: #c62828;
+  --surface: #12181b;
+  --surface-2: #1a2327;
+  --border: #203036;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--fg);
+  background: radial-gradient(80% 60% at 50% 0%, #0d1518 0%, transparent 70%),
+    radial-gradient(70% 50% at 100% 100%, #0c1214 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  background-attachment: fixed;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, 'Noto Sans',
+    'Liberation Sans', sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+a:hover {
+  color: var(--accent-2);
+}
+
+/* Selection highlight */
+::selection {
+  background: color-mix(in oklab, var(--accent) 30%, #000);
+  color: #fff;
+}
+
+/* Simple vignette */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 0%, transparent 60%, rgba(0, 0, 0, 0.35));
+  z-index: 0;
+}
+
+/* Tables baseline */
+table {
+  border-collapse: collapse;
+  background: var(--surface);
+}
+th,
+td {
+  border: 1px solid var(--border);
+}
+thead th {
+  background: #0f171a;
+  color: var(--fg);
+}
+
+/* Forms baseline */
+input,
+button {
+  font: inherit;
+}
+input[type='password'],
+input[type='text'] {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+button {
+  background: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 60%, #000);
+}
+button:hover {
+  filter: brightness(1.05);
+}
