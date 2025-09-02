@@ -56,7 +56,7 @@ import * as XLSX from 'xlsx';
               </table>
             </div>
             <div *ngSwitchCase="'image'" class="image-wrap">
-              <img [src]="pg.src" [alt]="pg.title" />
+              <img [src]="asset(pg.src)" [alt]="pg.title" />
             </div>
             <div *ngSwitchCase="'pdf'" class="pdf-wrap">
               <iframe class="frame" [src]="safeSrc()" title="{{ pg.title }}"></iframe>
@@ -301,13 +301,13 @@ export class BookPageComponent {
       const unlocked = this.books.isUnlocked(slug ?? '', current.id);
       // Ustaw src dla iframe (html/pdf) z użyciem sanitizer
       if (unlocked && ((current.kind ?? 'html') === 'html' || current.kind === 'pdf')) {
-        this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(current.src));
+        this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(current.src)));
       } else {
         this.safeSrc.set(null);
       }
       // Jeśli arkusz i odblokowane, wczytaj dane
       if (unlocked && (current.kind ?? 'html') !== 'html' && current.kind !== 'pdf') {
-        this.loadData(current.src, (current.kind ?? 'csv') as 'csv' | 'xlsx');
+        this.loadData(this.assetUrl(current.src), (current.kind ?? 'csv') as 'csv' | 'xlsx');
       } else {
         this.tableHeaders.set([]);
         this.tableRows.set([]);
@@ -323,10 +323,10 @@ export class BookPageComponent {
       this.password.set('');
       const pg = this.page();
       if (pg && ((pg.kind ?? 'html') === 'html' || pg.kind === 'pdf')) {
-        this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(pg.src));
+        this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(pg.src)));
       }
       if (pg && (pg.kind ?? 'html') !== 'html' && pg.kind !== 'pdf') {
-        this.loadData(pg.src, (pg.kind ?? 'csv') as 'csv' | 'xlsx');
+        this.loadData(this.assetUrl(pg.src), (pg.kind ?? 'csv') as 'csv' | 'xlsx');
       }
     } else {
       this.showToast('Nieprawidłowe hasło.');
@@ -348,7 +348,7 @@ export class BookPageComponent {
     this.router.navigate(['/', slug, n.id]);
     const next = this.books.getPage(slug, n.id)!;
     if ((next.kind ?? 'html') === 'html' || next.kind === 'pdf') {
-      this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(next.src));
+      this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(next.src)));
     }
   }
 
@@ -367,7 +367,7 @@ export class BookPageComponent {
     this.router.navigate(['/', slug, p.id]);
     const prev = this.books.getPage(slug, p.id)!;
     if ((prev.kind ?? 'html') === 'html' || prev.kind === 'pdf') {
-      this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(prev.src));
+      this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(prev.src)));
     }
   }
 
@@ -399,6 +399,18 @@ export class BookPageComponent {
       this.tableHeaders.set([]);
       this.tableRows.set([]);
     }
+  }
+
+  // Zamienia /uploads/... na absolutny URL backendu, aby nie trafiać w port 4200
+  asset(src: string) {
+    return this.assetUrl(src);
+  }
+
+  private assetUrl(src: string): string {
+    if (!src) return src;
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.startsWith('/uploads/')) return 'http://localhost:4000' + src;
+    return src;
   }
 
   private promptLabel(id: string): string {

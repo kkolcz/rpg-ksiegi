@@ -24,13 +24,13 @@ export class BooksService {
   private readonly unlocked = signal<Record<string, Set<string>>>({});
 
   constructor(private router: Router) {
-    // Wczytaj konfigurację z pliku JSON podczas startu aplikacji
-    this.loadConfig('/config/books.json');
+    // Spróbuj pobrać konfigurację z backendu, a w razie potrzeby fallback do pliku
+    this.loadConfig('http://localhost:4000/api/books', '/config/books.json');
   }
 
-  private async loadConfig(url: string) {
+  private async loadConfig(primaryUrl: string, fallbackUrl?: string) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(primaryUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as Book[];
       // prosta weryfikacja kształtu
@@ -41,7 +41,21 @@ export class BooksService {
         console.error('Nieprawidłowy format pliku konfiguracyjnego:', data);
       }
     } catch (err) {
-      console.error('Błąd wczytywania konfiguracji książek:', err);
+      console.warn('Błąd wczytywania z backendu, próba fallbacku:', err);
+      if (fallbackUrl) {
+        try {
+          const res = await fetch(fallbackUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = (await res.json()) as Book[];
+          if (Array.isArray(data)) {
+            this.books.set(data);
+            this.loaded.set(true);
+            return;
+          }
+        } catch (e2) {
+          console.error('Błąd wczytywania fallbacku z pliku:', e2);
+        }
+      }
     }
   }
 
