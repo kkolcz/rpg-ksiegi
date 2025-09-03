@@ -88,7 +88,7 @@ import * as XLSX from 'xlsx';
 
       <footer class="footer">
         <button (click)="goPrev()" [disabled]="!prev()">Poprzednia stronica</button>
-        <span>Strona {{ pg.id }}</span>
+        <span>Strona {{ pg.pageNumber }}</span>
         <button (click)="goNext()" [disabled]="!next()">Następna stronica</button>
       </footer>
     </div>
@@ -269,13 +269,13 @@ export class BookPageComponent {
   });
 
   readonly next = computed(() =>
-    this.page() ? this.books.nextPage(this.bookSlug()!, this.page()!.id) : undefined
+    this.page() ? this.books.nextPage(this.bookSlug()!, String(this.page()!.pageNumber)) : undefined
   );
   readonly prev = computed(() =>
-    this.page() ? this.books.prevPage(this.bookSlug()!, this.page()!.id) : undefined
+    this.page() ? this.books.prevPage(this.bookSlug()!, String(this.page()!.pageNumber)) : undefined
   );
   readonly unlocked = computed(() =>
-    this.page() ? this.books.isUnlocked(this.bookSlug()!, this.page()!.id) : false
+    this.page() ? this.books.isUnlocked(this.bookSlug()!, String(this.page()!.pageNumber)) : false
   );
 
   readonly password = signal('');
@@ -295,10 +295,10 @@ export class BookPageComponent {
       this.bookName.set(book?.name ?? '');
       const current = this.books.getPage(slug ?? '', page ?? undefined);
       if (!current) return;
-      this.pageId.set(current.id);
+      this.pageId.set(String(current.pageNumber));
       // reset komunikatu błędu przy zmianie strony
       this.error.set(false);
-      const unlocked = this.books.isUnlocked(slug ?? '', current.id);
+      const unlocked = this.books.isUnlocked(slug ?? '', String(current.pageNumber));
       // Ustaw src dla iframe (html/pdf) z użyciem sanitizer
       if (unlocked && ((current.kind ?? 'html') === 'html' || current.kind === 'pdf')) {
         this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(current.src)));
@@ -317,7 +317,11 @@ export class BookPageComponent {
 
   onSubmit(e: Event) {
     e.preventDefault();
-    const ok = this.books.tryUnlock(this.bookSlug()!, this.page()!.id, this.password());
+    const ok = this.books.tryUnlock(
+      this.bookSlug()!,
+      String(this.page()!.pageNumber),
+      this.password()
+    );
     this.error.set(!ok);
     if (ok) {
       this.password.set('');
@@ -337,16 +341,17 @@ export class BookPageComponent {
     const n = this.next();
     if (!n) return;
     const slug = this.bookSlug()!;
-    if (!this.books.isUnlocked(slug, n.id)) {
-      const pwd = window.prompt(this.promptLabel(n.id)) ?? '';
-      if (!this.books.tryUnlock(slug, n.id, pwd)) {
+    const nid = String(n.pageNumber);
+    if (!this.books.isUnlocked(slug, nid)) {
+      const pwd = window.prompt(this.promptLabel(nid)) ?? '';
+      if (!this.books.tryUnlock(slug, nid, pwd)) {
         this.error.set(true);
         this.showToast('Nieprawidłowe hasło.');
         return;
       }
     }
-    this.router.navigate(['/', slug, n.id]);
-    const next = this.books.getPage(slug, n.id)!;
+    this.router.navigate(['/', slug, nid]);
+    const next = this.books.getPage(slug, nid)!;
     if ((next.kind ?? 'html') === 'html' || next.kind === 'pdf') {
       this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(next.src)));
     }
@@ -356,16 +361,17 @@ export class BookPageComponent {
     const p = this.prev();
     if (!p) return;
     const slug = this.bookSlug()!;
-    if (!this.books.isUnlocked(slug, p.id)) {
-      const pwd = window.prompt(this.promptLabel(p.id)) ?? '';
-      if (!this.books.tryUnlock(slug, p.id, pwd)) {
+    const pid = String(p.pageNumber);
+    if (!this.books.isUnlocked(slug, pid)) {
+      const pwd = window.prompt(this.promptLabel(pid)) ?? '';
+      if (!this.books.tryUnlock(slug, pid, pwd)) {
         this.error.set(true);
         this.showToast('Nieprawidłowe hasło.');
         return;
       }
     }
-    this.router.navigate(['/', slug, p.id]);
-    const prev = this.books.getPage(slug, p.id)!;
+    this.router.navigate(['/', slug, pid]);
+    const prev = this.books.getPage(slug, pid)!;
     if ((prev.kind ?? 'html') === 'html' || prev.kind === 'pdf') {
       this.safeSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.assetUrl(prev.src)));
     }
@@ -409,7 +415,7 @@ export class BookPageComponent {
   private assetUrl(src: string): string {
     if (!src) return src;
     if (/^https?:\/\//i.test(src)) return src;
-    if (src.startsWith('/uploads/')) return 'http://localhost:4000' + src;
+    if (src.startsWith('/uploads/')) return 'https://rpg-ksiegi.onrender.com' + src;
     return src;
   }
 

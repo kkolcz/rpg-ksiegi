@@ -2,7 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 export type BookPage = {
-  id: string; // page id, used in route and to load content
+  pageNumber: number | string; // page number used to load content
   title: string; // optional display title
   src: string; // path to data (csv/xlsx) or html
   kind?: 'html' | 'csv' | 'xlsx' | 'image' | 'pdf'; // how to render
@@ -25,7 +25,7 @@ export class BooksService {
 
   constructor(private router: Router) {
     // Spróbuj pobrać konfigurację z backendu, a w razie potrzeby fallback do pliku
-    this.loadConfig('http://localhost:4000/api/books', '/config/books.json');
+    this.loadConfig('http://localhost:5200/api/books', '/config/books.json');
   }
 
   private async loadConfig(primaryUrl: string, fallbackUrl?: string) {
@@ -70,13 +70,13 @@ export class BooksService {
     const book = this.getBook(slug);
     if (!book) return undefined;
     if (!pageId) return book.pages[0];
-    return book.pages.find((p) => p.id === pageId) ?? book.pages[0];
+    return book.pages.find((p) => String(p.pageNumber) === String(pageId)) ?? book.pages[0];
   }
 
   isUnlocked(slug: string, pageId: string): boolean {
     const map = this.unlocked();
     const set = map[slug];
-    return !!set && set.has(pageId);
+    return !!set && set.has(String(pageId));
   }
 
   tryUnlock(slug: string, pageId: string, pwd: string): boolean {
@@ -85,7 +85,7 @@ export class BooksService {
     if (pwd.trim() === page.password) {
       const map = { ...this.unlocked() };
       const set = new Set(map[slug] ?? []);
-      set.add(pageId);
+      set.add(String(pageId));
       map[slug] = set;
       this.unlocked.set(map);
       return true;
@@ -96,14 +96,14 @@ export class BooksService {
   nextPage(slug: string, pageId: string): BookPage | undefined {
     const book = this.getBook(slug);
     if (!book) return undefined;
-    const idx = book.pages.findIndex((p) => p.id === pageId);
+    const idx = book.pages.findIndex((p) => String(p.pageNumber) === String(pageId));
     return idx >= 0 && idx + 1 < book.pages.length ? book.pages[idx + 1] : undefined;
   }
 
   prevPage(slug: string, pageId: string): BookPage | undefined {
     const book = this.getBook(slug);
     if (!book) return undefined;
-    const idx = book.pages.findIndex((p) => p.id === pageId);
+    const idx = book.pages.findIndex((p) => String(p.pageNumber) === String(pageId));
     return idx > 0 ? book.pages[idx - 1] : undefined;
   }
 }

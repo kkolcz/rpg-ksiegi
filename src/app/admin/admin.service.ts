@@ -8,14 +8,27 @@ export class AdminService {
   async login(username: string, password: string) {
     this.error.set(null);
     try {
-      const res = await fetch('http://localhost:4000/api/auth/login', {
+      const res = await fetch('http://localhost:5200/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username, password }).toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
       });
       if (!res.ok) throw new Error('Błędne dane logowania');
-      const data = await res.json();
-      this.token.set(data.token);
+
+      // Opcjonalne pobranie tokenu, jeśli backend zacznie go zwracać
+      try {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const data = await res.json();
+          if (data?.token) this.token.set(data.token);
+        } else {
+          this.token.set('dummy_token');
+          await res.text(); // skonsumuj body dla spójności
+        }
+      } catch {
+        // ignoruj błędy parsowania odpowiedzi
+      }
+
       return true;
     } catch (e: any) {
       this.error.set(e.message ?? 'Błąd logowania');
@@ -27,7 +40,7 @@ export class AdminService {
     const t = this.token();
     this.token.set(null);
     if (!t) return;
-    fetch('http://localhost:4000/api/auth/logout', {
+    fetch('http://localhost:5200/api/auth/logout', {
       headers: { Authorization: `Bearer ${t}` },
       method: 'POST',
     });
@@ -36,17 +49,17 @@ export class AdminService {
   async listBooks() {
     const t = this.token();
     if (!t) throw new Error('Brak autoryzacji');
-    const res = await fetch('http://localhost:4000/api/admin/books', {
+    const res = await fetch('http://localhost:5200/api/books', {
       headers: { Authorization: `Bearer ${t}` },
     });
     if (!res.ok) throw new Error('Błąd pobierania');
     return res.json();
   }
 
-  async deleteBook(slug: string) {
+  async deleteBook(id: string) {
     const t = this.token();
     if (!t) throw new Error('Brak autoryzacji');
-    const res = await fetch(`http://localhost:4000/api/admin/books/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`http://localhost:5200/api/books/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${t}` },
     });
@@ -59,64 +72,94 @@ export class AdminService {
     if (!t) throw new Error('Brak autoryzacji');
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch('http://localhost:4000/api/admin/upload', {
+    const res = await fetch('http://localhost:5200/api/file', {
       method: 'POST',
       headers: { Authorization: `Bearer ${t}` },
       body: fd,
     });
     if (!res.ok) throw new Error('Błąd uploadu');
-    return res.json();
+
+    const toAbsolute = (u?: string | null) => {
+      if (!u) return null as any;
+      const s = String(u).trim();
+      if (/^https?:\/\//i.test(s)) return s;
+      return 'http://localhost:5200' + (s.startsWith('/') ? '' : '/') + s;
+    };
+
+    // 1) Preferuj URL z nagłówka Location
+    const loc = res.headers.get('Location') || res.headers.get('location');
+    if (loc) return { url: toAbsolute(loc), originalName: file.name };
+
+    // 2) Fallback: spróbuj JSON (obsługa "src" itd.)
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const data = await res.json();
+      const raw = data?.src || data?.url || data?.location || data?.Location || data?.href;
+      const url = toAbsolute(raw);
+      if (url) return { url, originalName: data?.originalName || file.name };
+      return data;
+    }
+
+    // 3) Fallback: surowy tekst z URL
+    const text = (await res.text())?.trim();
+    if (text) {
+      const url = toAbsolute(text);
+      if (url) return { url, originalName: file.name };
+    }
+
+    throw new Error('Brak URL pliku w odpowiedzi (nagłówek Location/JSON nie zawiera linku).');
   }
 
   async upsertPage(
-    slug: string,
-    page: { id: string; title: string; src: string; kind?: string; password: string }
+    bookId: string,
+    page: {
+      pageNumber: number | string;
+      title: string;
+      src: string;
+      kind?: string;
+      password: string;
+    }
   ) {
     const t = this.token();
     if (!t) throw new Error('Brak autoryzacji');
-    const res = await fetch(
-      `http://localhost:4000/api/admin/books/${encodeURIComponent(slug)}/pages`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-        body: JSON.stringify(page),
-      }
-    );
+    const res = await fetch(`http://localhost:5200/api/page/${encodeURIComponent(bookId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      body: JSON.stringify(page),
+    });
     if (!res.ok) throw new Error('Błąd zapisu strony');
     return res.json();
   }
 
-  async saveBook(book: { slug: string; name: string; pages: any[] }) {
+  async saveBook(book: { id?: string; slug: string; name: string }) {
     const t = this.token();
     if (!t) throw new Error('Brak autoryzacji');
-    // Najpierw spróbuj aktualizacji; jeśli 404, utwórz nową księgę (POST)
-    const put = await fetch(
-      `http://localhost:4000/api/admin/books/${encodeURIComponent(book.slug)}`,
-      {
+
+    if (book.id) {
+      const res = await fetch(`http://localhost:5200/api/books/${encodeURIComponent(book.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-        body: JSON.stringify(book),
-      }
-    );
-    if (put.status === 404) {
-      const post = await fetch('http://localhost:4000/api/admin/books', {
+        body: JSON.stringify({ slug: book.slug, name: book.name }),
+      });
+      if (!res.ok) throw new Error('Błąd zapisu książki');
+      return res.json();
+    } else {
+      const res = await fetch('http://localhost:5200/api/books', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-        body: JSON.stringify(book),
+        body: JSON.stringify({ slug: book.slug, name: book.name }),
       });
-      if (!post.ok) throw new Error('Błąd tworzenia książki');
-      return post.json();
+      if (!res.ok) throw new Error('Błąd tworzenia książki');
+      return res.json();
     }
-    if (!put.ok) throw new Error('Błąd zapisu książki');
-    return put.json();
   }
 
-  async deletePage(slug: string, id: string) {
+  async deletePage(slug: string, pageNumber: string | number) {
     const t = this.token();
     if (!t) throw new Error('Brak autoryzacji');
     const res = await fetch(
-      `http://localhost:4000/api/admin/books/${encodeURIComponent(slug)}/pages/${encodeURIComponent(
-        id
+      `http://localhost:5200/api/admin/books/${encodeURIComponent(slug)}/pages/${encodeURIComponent(
+        String(pageNumber)
       )}`,
       {
         method: 'DELETE',
@@ -130,7 +173,7 @@ export class AdminService {
   async normalizeSrc(dryRun = false) {
     const t = this.token();
     if (!t) throw new Error('Brak autoryzacji');
-    const res = await fetch('http://localhost:4000/api/admin/normalize-src', {
+    const res = await fetch('http://localhost:5200/api/admin/normalize-src', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
       body: JSON.stringify({ dryRun }),

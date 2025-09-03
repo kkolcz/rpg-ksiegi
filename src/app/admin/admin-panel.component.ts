@@ -40,7 +40,7 @@ import { AdminService } from './admin.service';
             <td>{{ b.pages?.length || 0 }}</td>
             <td>{{ typeOf(b) }}</td>
             <td class="actions">
-              <button class="danger" (click)="remove(b.slug)">Usuń</button>
+              <button class="danger" (click)="remove(b.id, b.slug)">Usuń</button>
             </td>
           </tr>
         </tbody>
@@ -49,11 +49,11 @@ import { AdminService } from './admin.service';
         <h3>Dodaj/edytuj stronę</h3>
         <form (submit)="savePage($event)" class="form">
           <label
-            >ID strony
+            >Numer strony
             <input
               type="text"
-              [value]="pageForm.id"
-              (input)="pageForm.id = $any($event.target).value"
+              [value]="pageForm.pageNumber"
+              (input)="pageForm.pageNumber = $any($event.target).value"
               required
             />
           </label>
@@ -111,7 +111,7 @@ import { AdminService } from './admin.service';
       </section>
 
       <section class="edit">
-        <h3>Edycja księgi</h3>
+        <h3>Nowa/edycja księgi</h3>
         <form (submit)="saveBook($event)" class="form">
           <label
             >Slug księgi
@@ -152,7 +152,7 @@ import { AdminService } from './admin.service';
           <table class="tbl">
             <thead>
               <tr>
-                <th>ID</th>
+                <th>Nr</th>
                 <th>Tytuł</th>
                 <th>Typ</th>
                 <th>Src</th>
@@ -162,14 +162,14 @@ import { AdminService } from './admin.service';
             </thead>
             <tbody>
               <tr *ngFor="let p of b.pages">
-                <td>{{ p.id }}</td>
+                <td>{{ p.pageNumber }}</td>
                 <td>{{ p.title }}</td>
                 <td>{{ p.kind || 'csv' }}</td>
                 <td class="mono">{{ p.src }}</td>
                 <td class="mono">{{ p.password }}</td>
                 <td>
                   <button class="ghost" (click)="editPage(b.slug, p)">Edytuj</button>
-                  <button class="danger" (click)="removePage(b.slug, p.id)">Usuń</button>
+                  <button class="danger" (click)="removePage(b.slug, p.pageNumber)">Usuń</button>
                 </td>
               </tr>
             </tbody>
@@ -279,7 +279,7 @@ export class AdminPanelComponent implements OnInit {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly books = signal<any[]>([]);
-  pageForm: any = { id: '', title: '', slug: '', kind: 'csv', src: '', password: 'test' };
+  pageForm: any = { pageNumber: '', title: '', slug: '', kind: 'csv', src: '', password: 'test' };
   bookForm: any = { slug: '', name: '' };
   readonly normalizeInfo = signal<any | null>(null);
   readonly creatingBook = signal(false);
@@ -317,10 +317,10 @@ export class AdminPanelComponent implements OnInit {
     this.router.navigateByUrl('/admin/login');
   }
 
-  async remove(slug: string) {
+  async remove(id: string, slug: string) {
     if (!confirm(`Usunąć "${slug}"?`)) return;
     try {
-      await this.svc.deleteBook(slug);
+      await this.svc.deleteBook(id);
       await this.refresh();
     } catch (e: any) {
       alert(e.message ?? 'Błąd usuwania');
@@ -363,7 +363,7 @@ export class AdminPanelComponent implements OnInit {
         const text = await file.text();
         const payload = JSON.parse(text);
         const t = this.svc.token();
-        const res = await fetch('http://localhost:4000/api/admin/import', {
+        const res = await fetch('http://localhost:5200/api/admin/import', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -397,8 +397,16 @@ export class AdminPanelComponent implements OnInit {
     ev.preventDefault();
     const { slug, ...page } = this.pageForm;
     if (!slug) return alert('Podaj slug księgi');
+    const b = this.books().find((x) => x.slug === slug);
+    if (!b?.id) return alert('Nie znaleziono księgi o podanym slugu');
+    // Upewnij się, że pageNumber jest liczbą
+    if (typeof page.pageNumber === 'string') {
+      const n = parseInt(page.pageNumber, 10);
+      if (!Number.isFinite(n)) return alert('Nieprawidłowy numer strony');
+      page.pageNumber = n;
+    }
     try {
-      await this.svc.upsertPage(slug, page);
+      await this.svc.upsertPage(b.id, page);
       await this.refresh();
       alert('Zapisano stronę');
     } catch (e: any) {
@@ -409,7 +417,7 @@ export class AdminPanelComponent implements OnInit {
   editPage(slug: string, p: any) {
     this.pageForm = {
       slug,
-      id: p.id,
+      pageNumber: p.pageNumber,
       title: p.title,
       kind: p.kind || 'csv',
       src: p.src,
@@ -418,10 +426,10 @@ export class AdminPanelComponent implements OnInit {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async removePage(slug: string, id: string) {
-    if (!confirm(`Usunąć stronę ${id} z ${slug}?`)) return;
+  async removePage(slug: string, pageNumber: string | number) {
+    if (!confirm(`Usunąć stronę ${pageNumber} z ${slug}?`)) return;
     try {
-      await this.svc.deletePage(slug, id);
+      await this.svc.deletePage(slug, pageNumber);
       await this.refresh();
     } catch (e: any) {
       alert(e.message ?? 'Błąd usuwania strony');
@@ -433,8 +441,8 @@ export class AdminPanelComponent implements OnInit {
     try {
       const existing = this.books().find((b) => b.slug === this.bookForm.slug);
       const book = existing
-        ? { ...existing, name: this.bookForm.name }
-        : { slug: this.bookForm.slug, name: this.bookForm.name, pages: [] };
+        ? { id: existing.id, slug: existing.slug, name: this.bookForm.name }
+        : { slug: this.bookForm.slug, name: this.bookForm.name };
       await this.svc.saveBook(book);
       await this.refresh();
       alert('Zapisano książkę');
@@ -446,31 +454,16 @@ export class AdminPanelComponent implements OnInit {
   chooseSlug(slug: string) {
     this.pageForm.slug = slug;
     this.bookForm.slug = slug;
-    if (!this.pageForm.id) {
-      this.pageForm.id = this.getNextPageId(slug);
+    if (!this.pageForm.pageNumber) {
+      this.pageForm.pageNumber = this.getNextPageNumber(slug);
     }
   }
 
   async newBook() {
-    if (this.creatingBook()) return;
-    this.creatingBook.set(true);
-    try {
-      // Generuj unikalny slug jako UUID v4
-      const slugs = new Set((this.books() || []).map((b: any) => String(b.slug)));
-      let slug = this.generateUuid();
-      while (slugs.has(slug)) slug = this.generateUuid();
-      const name = 'Nowa księga';
-      await this.svc.saveBook({ slug, name, pages: [] });
-      await this.refresh();
-      // Ustaw formularze na świeżo utworzoną księgę i przygotuj szybkie dodanie strony
-      this.bookForm = { slug, name };
-      this.chooseSlug(slug);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (e: any) {
-      alert(e.message ?? 'Błąd tworzenia księgi');
-    } finally {
-      this.creatingBook.set(false);
-    }
+    // Przygotuj formularz do ręcznego wypełnienia i przewiń do sekcji
+    this.bookForm = { slug: '', name: '' };
+    this.pageForm.slug = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   private generateUuid(): string {
@@ -494,29 +487,21 @@ export class AdminPanelComponent implements OnInit {
   }
 
   quickAddPage(slug: string) {
-    const nextId = this.getNextPageId(slug);
-    this.pageForm = { id: nextId, title: '', slug, kind: 'csv', src: '', password: 'test' };
+    const nextId = this.getNextPageNumber(slug);
+    this.pageForm = { pageNumber: nextId, title: '', slug, kind: 'csv', src: '', password: 'test' };
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  private getNextPageId(slug: string): string {
+  private getNextPageNumber(slug: string): string {
     const b = this.books().find((x) => x.slug === slug);
-    const pages = (b?.pages ?? []) as Array<{ id: string }>;
-    const existing = new Set(pages.map((p) => String(p.id)));
-    // Szukamy największej liczby występującej w identyfikatorach (wyodrębnione cyfry)
-    let maxNum = 0;
-    for (const p of pages) {
-      const s = String(p.id);
-      const matches = s.match(/\d+/g);
-      if (matches) {
-        for (const m of matches) {
-          const n = parseInt(m, 10);
-          if (Number.isFinite(n) && n > maxNum) maxNum = n;
-        }
-      }
-    }
+    const pages = (b?.pages ?? []) as Array<{ pageNumber: string | number }>;
+    const nums = pages
+      .map((p) => Number(p.pageNumber))
+      .filter((n) => Number.isFinite(n)) as number[];
+    const maxNum = nums.length ? Math.max(...nums) : 0;
     let candidate = String(maxNum + 1);
-    // Upewnij się, że unikalny
+    // Upewnij się, że unikalny (porównuj jako string liczb)
+    const existing = new Set(pages.map((p) => String(p.pageNumber)));
     while (existing.has(candidate)) {
       candidate = String(parseInt(candidate, 10) + 1);
     }
